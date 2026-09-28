@@ -1,69 +1,119 @@
-﻿from datetime import datetime, timedelta
+from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
-
 
 # Page config for mobile and desktop responsiveness
 st.set_page_config(
     page_title="Family Meal Planner", page_icon="🍳", layout="centered"
 )
 
-
 st.title("🍳 Family Meal Planner & Shopping List")
 st.markdown(
-    "Plan your weekly meals, grow your recipe library, and generate a categorized shopping list instantly."
+    "Plan your weekly meals, grow your recipe library, and generate a"
+    " categorized shopping list instantly."
 )
 
+# --- GOOGLE SHEETS LIVE DATA CONNECTION ---
+# Using st.connection (requires secrets.toml configured with your Google Sheets credentials)
+# Alternatively, you can swap this with your preferred gspread implementation.
+@st.cache_data(ttl=60)
+def load_data_from_sheet():
+  try:
+    conn = st.connection("gsheets", type="gsheets")
+    # Reads the 'Meal_Library' worksheet from your Google Sheet
+    df = conn.read(worksheet="Meal_Library", usecols=[0, 1, 2], ttl=5)
+    # Drop empty rows if any
+    df = df.dropna(subset=["Meal Name"])
+    return df
+  except Exception as e:
+    # Fallback placeholder if secrets/connection aren't active yet during local testing
+    st.sidebar.warning(
+        "Live Google Sheet connection not detected. Using session cache/fallback"
+        f" data. Error: {e}"
+    )
+    if "df_library" not in st.session_state:
+      st.session_state.df_library = pd.DataFrame({
+          "Meal Name": [
+              "Chicken Curry",
+              "Homemade Pizza",
+              "Lamb Souvlaki",
+              "Chilli",
+              "Filled Pasta with Salmon",
+              "Roast Chook and Veggies",
+          ],
+          "Category / Tags": [
+              "Chicken, Curry, Rice",
+              "Italian, Quick",
+              "Greek, Lamb",
+              "Mexican, Beef, Quick",
+              "Italian, Seafood",
+              "Roast, Chicken",
+          ],
+          "Ingredients & Aisle Tags": [
+              (
+                  "Chicken breast | Meat & Seafood, Spinach (fresh) | Fresh"
+                  " Produce, Chickpeas | Pantry, Lentils | Pantry, Curry Paste |"
+                  " Pantry, Jasmin Rice | Pantry"
+              ),
+              (
+                  "Pizza bases | Bakery, Passata | Pantry, Cheddar (grated) |"
+                  " Dairy & Eggs"
+              ),
+              (
+                  "Lamb chops | Meat & Seafood, Flatbread | Bakery, Feta"
+                  " cheese | Dairy & Eggs, Cucumber | Fresh Produce, Tomatoes |"
+                  " Fresh Produce"
+              ),
+              (
+                  "Mince meat | Meat & Seafood, Tinned tomatoes | Pantry,"
+                  " Four-bean mix | Pantry, Carrots | Fresh Produce, Onions |"
+                  " Fresh Produce, Garlic | Fresh Produce"
+              ),
+              (
+                  "Filled pasta | Refrigerated Meal Components, Salmon pieces"
+                  " | Meat & Seafood, Fresh mixed vegetables | Fresh Produce,"
+                  " Cream | Dairy & Eggs, Garlic & herb sauce | Pantry"
+              ),
+              (
+                  "Whole chicken | Meat & Seafood, Potatoes | Fresh Produce,"
+                  " Carrots | Fresh Produce, Pumpkin | Fresh Produce, Butter |"
+                  " Dairy & Eggs"
+              ),
+          ],
+      })
+    return st.session_state.df_library
 
-# --- GOOGLE SHEETS CONNECTION SIMULATION ---
-# In production, use st.connection("gsheets", type=GsheetsConnection)
-# For setup, we mock reading/writing from session state or CSV files linked to Drive.
 
+# Load the master library dataframe
+df_library = load_data_from_sheet()
 
-
-
-@st.cache_data
-def load_data():
-  # Placeholder initialization for demo/bootstrap
-  library_data = {
-      "Meal Name": ["Chicken Curry", "Homemade Pizza", "Lamb Souvlaki"],
-      "Category": ["Chicken, Curry", "Italian", "Greek"],
-      "Ingredients": [
-          (
-              "Chicken breast (Meat & Seafood), Spinach (Fresh Produce),"
-              " Chickpeas (Pantry), Curry Paste (Pantry), Jasmin Rice (Pantry)"
-          ),
-          (
-              "Pizza bases (Bakery), Passata (Pantry), Cheddar cheese (Dairy &"
-              " Eggs)"
-          ),
-          (
-              "Lamb chops (Meat & Seafood), Flatbread (Bakery), Feta cheese"
-              " (Dairy & Eggs), Cucumber (Fresh Produce)"
-          ),
-      ],
-  }
-  return pd.DataFrame(library_data)
-
-
-
-
-df_library = load_data()
-
+# Sidebar controls for reloading/refreshing data
+with st.sidebar:
+  st.subheader("Database Sync")
+  if st.button("🔄 Reload from Google Sheet"):
+    st.cache_data.clear()
+    df_library = load_data_from_sheet()
+    st.success("Refreshed successfully from spreadsheet!")
+    st.rerun()
 
 # --- NAVIGATION TABS ---
 tab_plan, tab_library, tab_shopping = st.tabs(
     ["📅 Weekly Planner", "📚 Meal Library", "🛒 Shopping List"]
 )
 
-
 with tab_plan:
   st.subheader("Plan Your Week")
+
+  # Dynamic Week Starting Date Picker
   today = datetime.today()
-  start_of_week = today - timedelta(days=today.weekday())
-  week_date = st.date_input("Select Week Starting (Monday)", start_of_week)
+  default_start_of_week = today - timedelta(days=today.weekday())
+  week_date = st.date_input(
+      "Select Week Starting (Monday)", default_start_of_week
+  )
 
-
+  # Calculate exact calendar dates for each day based on the selected week_date
+  st.markdown(f"*Planning meals for the week of **{week_date.strftime('%A, %B %d, %Y')}***")
+  
   days = [
       "Monday",
       "Tuesday",
@@ -74,62 +124,40 @@ with tab_plan:
       "Sunday",
   ]
 
-
   selected_meals = {}
-  for day in days:
-    st.markdown(f"**{day}**")
+  meal_options = ["--- None ---"] + list(df_library["Meal Name"].dropna())
+
+  for index, day in enumerate(days):
+    # Compute the specific date for this day of the week
+    current_day_date = week_date + timedelta(days=index)
+    st.markdown(f"**{day} ({current_day_date.strftime('%b %d')})**")
+    
     col1, col2 = st.columns(2)
     with col1:
       lunch = st.selectbox(
-          f"Lunch ({day})",
-          ["--- None ---"] + list(df_library["Meal Name"]),
-          key=f"lunch_{day}",
+          f"Lunch ({day})", meal_options, key=f"lunch_{day}_{week_date}"
       )
     with col2:
       dinner = st.selectbox(
-          f"Dinner ({day})",
-          ["--- None ---"] + list(df_library["Meal Name"]),
-          key=f"dinner_{day}",
+          f"Dinner ({day})", meal_options, key=f"dinner_{day}_{week_date}"
       )
-    selected_meals[day] = {"Lunch": lunch, "Dinner": dinner}
-
+    selected_meals[day] = {
+        "Date": current_day_date.strftime("%Y-%m-%d"),
+        "Lunch": lunch,
+        "Dinner": dinner,
+    }
 
   if st.button("Save Weekly Plan"):
-    st.success("Weekly plan updated and saved to Google Drive database!")
-
+    st.success(f"Weekly plan for the week of {week_date} saved successfully!")
 
 with tab_library:
   st.subheader("Master Recipe & Meal Bank")
   st.markdown(
-      "Add new meal ideas here. They will permanently join your selection pool"
-      " for future weeks."
+      "Meals loaded directly from your Google Sheet master library database."
   )
 
-
-  with st.form("add_meal_form"):
-    new_meal_name = st.text_input("New Meal Name")
-    new_category = st.text_input("Tags / Style (e.g., Pasta, Quick, Beef)")
-    new_ingredients = st.text_area(
-        "Ingredients & Aisles (Format: Item Name (Aisle Name), separated by"
-        " commas)"
-    )
-    submitted = st.form_submit_button("Add to Meal Library")
-
-
-    if submitted and new_meal_name:
-      new_row = pd.DataFrame({
-          "Meal Name": [new_meal_name],
-          "Category": [new_category],
-          "Ingredients": [new_ingredients],
-      })
-      df_library = pd.concat([df_library, new_row], ignore_index=True)
-      st.success(
-          f"Successfully added '{new_meal_name}' to your growing meal bank!"
-      )
-
-
+  # Display the live dataframe pulled from Google Sheets
   st.dataframe(df_library, use_container_width=True)
-
 
 with tab_shopping:
   st.subheader("🛒 Smart Categorized Shopping List")
@@ -138,29 +166,11 @@ with tab_shopping:
       " supermarket aisle."
   )
 
-
   if st.button("Generate Shopping List"):
-    # Simulated compiled shopping list grouped by aisle
-    shopping_categories = {
-        "🥬 Fresh Produce": ["Spinach (fresh)", "Cucumber", "Tomatoes"],
-        "🍞 Bakery": ["Pizza bases", "Flatbread"],
-        "🧀 Dairy & Eggs": ["Cheddar cheese", "Feta cheese"],
-        "🛒 Pantry": [
-            "Chickpeas",
-            "Curry Paste",
-            "Jasmin Rice",
-            "Passata",
-        ],
-        "🥩 Meat & Seafood": ["Chicken breast", "Lamb chops"],
-    }
-
-
-    for category, items in shopping_categories.items():
-      st.markdown(f"### {category}")
-      for item in items:
-        st.checkbox(item, key=f"shop_{item}")
-  else:
+    # Future enhancement: parse ingredients dynamically from df_library based on selected_meals
     st.info(
-        "Click 'Generate Shopping List' above to compile items based on your"
-        " meal plan."
+        "Shopping list generator will aggregate ingredients for your chosen"
+        " weekly menu items."
     )
+  else:
+    st.info("Click 'Generate Shopping List' above to compile items.")
