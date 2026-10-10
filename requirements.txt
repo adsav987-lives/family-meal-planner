@@ -1,0 +1,2 @@
+pandas
+streamlit[auth]>=1.42.0
