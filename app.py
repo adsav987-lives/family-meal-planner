@@ -14,10 +14,31 @@ st.markdown(
 )
 
 # --- GOOGLE OIDC AUTHENTICATION ---
+auth_settings = st.secrets.get("auth")
+required_auth_settings = (
+    "redirect_uri",
+    "cookie_secret",
+    "client_id",
+    "client_secret",
+    "server_metadata_url",
+)
+missing_auth_settings = [
+    setting
+    for setting in required_auth_settings
+    if auth_settings is None or setting not in auth_settings
+]
+if missing_auth_settings:
+    st.error(
+        "Google sign-in is not configured. Add the required [auth] settings "
+        "in Streamlit Cloud under Manage app > Settings > Secrets. Missing: "
+        f"{', '.join(missing_auth_settings)}."
+    )
+    st.stop()
+
 if not st.user.is_logged_in:
     st.markdown("### Login")
     if st.button("Login with Google"):
-        st.login("google")
+        st.login()
     st.stop()
 
 # --- GOOGLE SHEETS LIVE DATA CONNECTION ---
