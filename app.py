@@ -13,6 +13,22 @@ st.markdown(
     " categorized shopping list instantly."
 )
 
+# --- AUTH / SESSION STATE ---
+if "user" not in st.session_state:
+    st.session_state["user"] = None
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    st.markdown("### Login")
+    st.markdown("Login with Google")
+    if st.button("Login"):
+        st.session_state["user"] = "John Doe"
+        st.session_state["logged_in"] = True
+        st.success("Logged in successfully!")
+        st.rerun()
+    st.stop()
+
 # --- GOOGLE SHEETS LIVE DATA CONNECTION ---
 # Using st.connection (requires secrets.toml configured with your Google Sheets credentials)
 # Alternatively, you can swap this with your preferred gspread implementation.
@@ -174,3 +190,21 @@ with tab_shopping:
     )
   else:
     st.info("Click 'Generate Shopping List' above to compile items.")
+# Display user name in sidebar
+user_name = st.session_state.get("user")
+st.sidebar.write(f"Logged in as: {user_name}")
+
+# Add more sidebar content here
+
+# Main content
+if user_name:
+    st.write(f"Welcome, {user_name}")
+else:
+    st.write("Welcome!")
+
+# Logout button
+if st.button("Logout"):
+    st.session_state["user"] = None
+    st.session_state["logged_in"] = False
+    st.markdown("Logged out successfully!")
+    st.rerun()
