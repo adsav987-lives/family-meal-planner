@@ -1,0 +1,7 @@
+# Streamlit secrets (Do NOT commit to GitHub!)
+.streamlit/secrets.toml
+
+# Virtual environment and cache
+venv/
+__pycache__/
+.env
