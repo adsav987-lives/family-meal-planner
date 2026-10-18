@@ -13,67 +13,7 @@ st.title("🍳 Family Meal Planner & Shopping List")
 st.markdown("Plan your weekly meals, grow your recipe library, and generate a categorized shopping list instantly.")
 
 # ==============================================================================
-# 1. LOCAL DEVELOPMENT TOGGLE
-# ==============================================================================
-# Set to True if you want to bypass Google Sign-In while developing locally in VS Code!
-# Set to False once you've saved your redirect URIs in Google Cloud Console or deploy to Streamlit Cloud.
-BYPASS_AUTH_LOCAL = False
-
-# ==============================================================================
-# 2. GOOGLE OIDC AUTHENTICATION
-# ==============================================================================
-auth_settings = st.secrets.get("auth")
-required_auth_settings = (
-    "redirect_uri",
-    "cookie_secret",
-    "client_id",
-    "client_secret",
-    "server_metadata_url",
-)
-
-missing_auth_settings = [
-    setting
-    for setting in required_auth_settings
-    if auth_settings is None or setting not in auth_settings
-]
-
-if missing_auth_settings and not BYPASS_AUTH_LOCAL:
-    st.error(
-        f"⚠️ Google sign-in is not fully configured. Missing in secrets.toml: "
-        f"{', '.join(missing_auth_settings)}."
-    )
-    st.info("💡 Tip: You can set `BYPASS_AUTH_LOCAL = True` at the top of app.py to work offline in VS Code.")
-    st.stop()
-
-if not BYPASS_AUTH_LOCAL:
-    if not st.user.is_logged_in:
-        st.markdown("### Please Sign In")
-        st.caption("Sign in with your family Google account to manage your meal plan.")
-        if st.button("🔑 Login with Google", type="primary"):
-            st.login()
-        st.stop()
-
-    # --- EMAIL ALLOWLIST (Only these family members can access) ---
-    ALLOWED_FAMILY_MEMBERS = [
-        "adsav987@gmail.com",
-        "partner_email@gmail.com",
-        "family_member@gmail.com",
-    ]
-
-    user_email = st.user.get("email")
-    if user_email not in ALLOWED_FAMILY_MEMBERS:
-        st.error(
-            f"⛔ Access denied for {user_email}. "
-            "Only approved family members can access this planner."
-        )
-        st.stop()
-
-    user_name = st.user.get("name") or st.user.get("email") or "Family Member"
-else:
-    user_name = "Local Developer (Offline Mode)"
-
-# ==============================================================================
-# 3. GOOGLE SHEETS LIVE DATA CONNECTION (WITH FALLBACK)
+# 1. GOOGLE SHEETS LIVE DATA CONNECTION (WITH FALLBACK)
 # ==============================================================================
 @st.cache_data(ttl=60)
 def load_data_from_sheet():
@@ -116,10 +56,6 @@ df_library = load_data_from_sheet()
 
 # Sidebar
 with st.sidebar:
-    st.subheader(f"👤 {user_name}")
-    if not BYPASS_AUTH_LOCAL:
-        if st.button("Logout"):
-            st.logout()
     st.divider()
     st.subheader("Database Sync")
     if st.button("🔄 Reload from Google Sheet"):
@@ -129,7 +65,7 @@ with st.sidebar:
         st.rerun()
 
 # ==============================================================================
-# 4. NAVIGATION TABS
+# 2. NAVIGATION TABS
 # ==============================================================================
 tab_plan, tab_library, tab_shopping = st.tabs(
     ["📅 Weekly Planner", "📚 Meal Library", "🛒 Shopping List"]
