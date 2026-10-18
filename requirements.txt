@@ -1,5 +1,4 @@
 pandas
-streamlit[auth]>=1.42.0
 streamlit>=1.38.0
 pandas>=2.0.0
-st-gsheets-connection
+st-gsheets-connection>=0.1.0
