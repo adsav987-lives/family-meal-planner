@@ -16,12 +16,37 @@ st.markdown("Plan your weekly meals, grow your recipe library, and generate a ca
 # ==============================================================================
 # 1. GOOGLE SHEETS LIVE DATA CONNECTION (WITH VISIBLE STATUS)
 # ==============================================================================
+default_spreadsheet_url = (
+    st.secrets.get("connections", {})
+    .get("gsheets", {})
+    .get("spreadsheet", "")
+)
+if "spreadsheet_url" not in st.session_state:
+    st.session_state.spreadsheet_url = default_spreadsheet_url
+
+with st.sidebar:
+    with st.form("spreadsheet_connection_form"):
+        st.text_input(
+            "Google Spreadsheet URL",
+            key="spreadsheet_url",
+            help="Paste the URL of the Google Sheet shared with the configured service account.",
+        )
+        connect_to_sheet = st.form_submit_button("Connect / Reload from Google Sheet")
+
+if connect_to_sheet:
+    st.cache_data.clear()
+
 @st.cache_data(ttl=60)
-def load_data_from_sheet():
+def load_data_from_sheet(spreadsheet_url):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         # Read worksheet 'Meal_Library'
-        df = conn.read(worksheet="Meal_Library", usecols=[0, 1, 2], ttl=5)
+        df = conn.read(
+            spreadsheet=spreadsheet_url,
+            worksheet="Meal_Library",
+            usecols=[0, 1, 2],
+            ttl=5,
+        )
         df = df.dropna(subset=["Meal Name"])
         return df, None
     except Exception as e:
@@ -54,7 +79,8 @@ def load_data_from_sheet():
         })
         return fallback_df, str(e)
 
-df_library, connection_error = load_data_from_sheet()
+spreadsheet_url = st.session_state.spreadsheet_url
+df_library, connection_error = load_data_from_sheet(spreadsheet_url)
 
 # Sidebar: Shows connection status so you know whether it's live or using fallback
 with st.sidebar:
@@ -64,11 +90,6 @@ with st.sidebar:
         st.caption(f"Reason: {connection_error}")
     else:
         st.success("✅ Connected to Google Sheet!")
-
-    if st.button("🔄 Reload from Google Sheet"):
-        st.cache_data.clear()
-        df_library, connection_error = load_data_from_sheet()
-        st.rerun()
 
 # ==============================================================================
 # 2. NAVIGATION TABS
@@ -178,7 +199,11 @@ with tab_add:
                         "Ingredients & Aisle Tags": new_ingredients.strip(),
                     }])
                     updated_df = pd.concat([df_library, new_row], ignore_index=True)
-                    conn.update(worksheet="Meal_Library", data=updated_df)
+                    conn.update(
+                        spreadsheet=st.session_state.spreadsheet_url,
+                        worksheet="Meal_Library",
+                        data=updated_df,
+                    )
                     st.success(f"Added '{new_name}' to your Google Sheet!")
                     st.cache_data.clear()
                     st.rerun()
