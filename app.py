@@ -1,7 +1,9 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit_gsheets import GSheetsConnection
+from weekly_plan_export import build_weekly_plan_html, build_weekly_plan_pdf
 
 # Page config
 st.set_page_config(
@@ -16,12 +18,37 @@ st.markdown("Plan your weekly meals, grow your recipe library, and generate a ca
 # ==============================================================================
 # 1. GOOGLE SHEETS LIVE DATA CONNECTION (WITH VISIBLE STATUS)
 # ==============================================================================
+default_spreadsheet_url = (
+    st.secrets.get("connections", {})
+    .get("gsheets", {})
+    .get("spreadsheet", "")
+)
+if "spreadsheet_url" not in st.session_state:
+    st.session_state.spreadsheet_url = default_spreadsheet_url
+
+with st.sidebar:
+    with st.form("spreadsheet_connection_form"):
+        st.text_input(
+            "Google Spreadsheet URL",
+            key="spreadsheet_url",
+            help="Paste the URL of the Google Sheet shared with the configured service account.",
+        )
+        connect_to_sheet = st.form_submit_button("Connect / Reload from Google Sheet")
+
+if connect_to_sheet:
+    st.cache_data.clear()
+
 @st.cache_data(ttl=60)
-def load_data_from_sheet():
+def load_data_from_sheet(spreadsheet_url):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         # Read worksheet 'Meal_Library'
-        df = conn.read(worksheet="Meal_Library", usecols=[0, 1, 2], ttl=5)
+        df = conn.read(
+            spreadsheet=spreadsheet_url,
+            worksheet="Meal_Library",
+            usecols=[0, 1, 2],
+            ttl=5,
+        )
         df = df.dropna(subset=["Meal Name"])
         return df, None
     except Exception as e:
@@ -54,7 +81,8 @@ def load_data_from_sheet():
         })
         return fallback_df, str(e)
 
-df_library, connection_error = load_data_from_sheet()
+spreadsheet_url = st.session_state.spreadsheet_url
+df_library, connection_error = load_data_from_sheet(spreadsheet_url)
 
 # Sidebar: Shows connection status so you know whether it's live or using fallback
 with st.sidebar:
@@ -64,11 +92,6 @@ with st.sidebar:
         st.caption(f"Reason: {connection_error}")
     else:
         st.success("✅ Connected to Google Sheet!")
-
-    if st.button("🔄 Reload from Google Sheet"):
-        st.cache_data.clear()
-        df_library, connection_error = load_data_from_sheet()
-        st.rerun()
 
 # ==============================================================================
 # 2. NAVIGATION TABS
@@ -109,7 +132,31 @@ with tab_plan:
 
     if st.button("💾 Save Weekly Plan", type="primary"):
         st.session_state.weekly_selections = selected_meals
+        st.session_state.saved_weekly_plan = {
+            "week_start": week_date.isoformat(),
+            "days": selected_meals,
+        }
         st.success(f"Weekly plan for the week of {week_date.strftime('%b %d, %Y')} saved successfully!")
+
+    saved_weekly_plan = st.session_state.get("saved_weekly_plan")
+    if saved_weekly_plan:
+        saved_week_start = date.fromisoformat(saved_weekly_plan["week_start"])
+        saved_days = saved_weekly_plan["days"]
+        pdf_data = build_weekly_plan_pdf(saved_week_start, saved_days)
+        st.download_button(
+            "⬇️ Download weekly plan PDF",
+            data=pdf_data,
+            file_name=f"weekly-meal-plan-{saved_week_start.isoformat()}.pdf",
+            mime="application/pdf",
+        )
+
+        with st.expander("Print or preview the saved plan"):
+            st.caption("The print layout uses a narrow 90 mm page, designed for phone viewing and sharing.")
+            components.html(
+                build_weekly_plan_html(saved_week_start, saved_days),
+                height=720,
+                scrolling=True,
+            )
 
 with tab_library:
     st.subheader("Master Recipe & Meal Bank")
@@ -178,7 +225,11 @@ with tab_add:
                         "Ingredients & Aisle Tags": new_ingredients.strip(),
                     }])
                     updated_df = pd.concat([df_library, new_row], ignore_index=True)
-                    conn.update(worksheet="Meal_Library", data=updated_df)
+                    conn.update(
+                        spreadsheet=st.session_state.spreadsheet_url,
+                        worksheet="Meal_Library",
+                        data=updated_df,
+                    )
                     st.success(f"Added '{new_name}' to your Google Sheet!")
                     st.cache_data.clear()
                     st.rerun()
