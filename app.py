@@ -6,7 +6,6 @@ from streamlit_gsheets import GSheetsConnection
 from weekly_plan_export import build_weekly_plan_html, build_weekly_plan_pdf
 
 # Page config
-# Page config
 st.set_page_config(
     page_title="Family Meal Planner",
     page_icon="🍳",
@@ -18,7 +17,6 @@ st.markdown("Plan your weekly meals, grow your recipe library, and generate a ca
 
 # ==============================================================================
 # 1. GOOGLE SHEETS LIVE DATA CONNECTION (WITH VISIBLE STATUS)
-# 1. GOOGLE SHEETS LIVE DATA CONNECTION (WITH VISIBLE STATUS)
 # ==============================================================================
 default_spreadsheet_url = (
     st.secrets.get("connections", {})
@@ -40,25 +38,6 @@ with st.sidebar:
 if connect_to_sheet:
     st.cache_data.clear()
 
-default_spreadsheet_url = (
-    st.secrets.get("connections", {})
-    .get("gsheets", {})
-    .get("spreadsheet", "")
-)
-if "spreadsheet_url" not in st.session_state:
-    st.session_state.spreadsheet_url = default_spreadsheet_url
-
-with st.sidebar:
-    with st.form("spreadsheet_connection_form"):
-        st.text_input(
-            "Google Spreadsheet URL",
-            key="spreadsheet_url",
-            help="Paste the URL of the Google Sheet shared with the configured service account.",
-        )
-        connect_to_sheet = st.form_submit_button("Connect / Reload from Google Sheet")
-
-if connect_to_sheet:
-    st.cache_data.clear()
 
 @st.cache_data(ttl=60)
 def load_data_from_sheet(spreadsheet_url):
@@ -71,16 +50,7 @@ def load_data_from_sheet(spreadsheet_url):
             usecols=[0, 1, 2],
             ttl=5,
         )
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        # Read worksheet 'Meal_Library'
-        df = conn.read(
-            spreadsheet=spreadsheet_url,
-            worksheet="Meal_Library",
-            usecols=[0, 1, 2],
-            ttl=5,
-        )
         df = df.dropna(subset=["Meal Name"])
-        return df, None
         return df, None
     except Exception as e:
         # Fallback dataset if connection is not yet configured
@@ -111,49 +81,12 @@ def load_data_from_sheet(spreadsheet_url):
             ],
         })
         return fallback_df, str(e)
-        # Fallback dataset if connection is not yet configured
-        fallback_df = pd.DataFrame({
-            "Meal Name": [
-                "Chicken Curry",
-                "Homemade Pizza",
-                "Lamb Souvlaki",
-                "Chilli",
-                "Filled Pasta with Salmon",
-                "Roast Chook and Veggies",
-            ],
-            "Category / Tags": [
-                "Chicken, Curry, Rice",
-                "Italian, Quick",
-                "Greek, Lamb",
-                "Mexican, Beef, Quick",
-                "Italian, Seafood",
-                "Roast, Chicken",
-            ],
-            "Ingredients & Aisle Tags": [
-                "Chicken breast | Meat & Seafood, Spinach (fresh) | Fresh Produce, Chickpeas | Pantry, Lentils | Pantry, Curry Paste | Pantry, Jasmin Rice | Pantry",
-                "Pizza bases | Bakery, Passata | Pantry, Cheddar (grated) | Dairy & Eggs",
-                "Lamb chops | Meat & Seafood, Flatbread | Bakery, Feta cheese | Dairy & Eggs, Cucumber | Fresh Produce, Tomatoes | Fresh Produce",
-                "Mince meat | Meat & Seafood, Tinned tomatoes | Pantry, Four-bean mix | Pantry, Carrots | Fresh Produce, Onions | Fresh Produce, Garlic | Fresh Produce",
-                "Filled pasta | Refrigerated Meal Components, Salmon pieces | Meat & Seafood, Fresh mixed vegetables | Fresh Produce, Cream | Dairy & Eggs, Garlic & herb sauce | Pantry",
-                "Whole chicken | Meat & Seafood, Potatoes | Fresh Produce, Carrots | Fresh Produce, Pumpkin | Fresh Produce, Butter | Dairy & Eggs",
-            ],
-        })
-        return fallback_df, str(e)
 
 spreadsheet_url = st.session_state.spreadsheet_url
 df_library, connection_error = load_data_from_sheet(spreadsheet_url)
-spreadsheet_url = st.session_state.spreadsheet_url
-df_library, connection_error = load_data_from_sheet(spreadsheet_url)
 
-# Sidebar: Shows connection status so you know whether it's live or using fallback
 # Sidebar: Shows connection status so you know whether it's live or using fallback
 with st.sidebar:
-    st.subheader("Google Sheet Status")
-    if connection_error:
-        st.warning("⚠️ Using Fallback Data")
-        st.caption(f"Reason: {connection_error}")
-    else:
-        st.success("✅ Connected to Google Sheet!")
     st.subheader("Google Sheet Status")
     if connection_error:
         st.warning("⚠️ Using Fallback Data")
@@ -228,7 +161,6 @@ with tab_plan:
 
 with tab_library:
     st.subheader("Master Recipe & Meal Bank")
-    st.markdown("Meals loaded from your Google Sheet (`Meal_Library` tab):")
     st.markdown("Meals loaded from your Google Sheet (`Meal_Library` tab):")
     st.dataframe(df_library, use_container_width=True)
 
