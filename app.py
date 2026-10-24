@@ -62,7 +62,6 @@ if connect_to_sheet:
 
 @st.cache_data(ttl=60)
 def load_data_from_sheet(spreadsheet_url):
-def load_data_from_sheet(spreadsheet_url):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         # Read worksheet 'Meal_Library'
