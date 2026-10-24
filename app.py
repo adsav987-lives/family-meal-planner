@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 
-# Page config for mobile and desktop responsiveness
+# Page config
 st.set_page_config(
     page_title="Family Meal Planner",
     page_icon="🍳",
@@ -13,62 +14,67 @@ st.title("🍳 Family Meal Planner & Shopping List")
 st.markdown("Plan your weekly meals, grow your recipe library, and generate a categorized shopping list instantly.")
 
 # ==============================================================================
-# 1. GOOGLE SHEETS LIVE DATA CONNECTION (WITH FALLBACK)
+# 1. GOOGLE SHEETS LIVE DATA CONNECTION (WITH VISIBLE STATUS)
 # ==============================================================================
 @st.cache_data(ttl=60)
 def load_data_from_sheet():
     try:
-        conn = st.connection("gsheets", type="gsheets")
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        # Read worksheet 'Meal_Library'
         df = conn.read(worksheet="Meal_Library", usecols=[0, 1, 2], ttl=5)
         df = df.dropna(subset=["Meal Name"])
-        return df
+        return df, None
     except Exception as e:
-        if "df_library" not in st.session_state:
-            st.session_state.df_library = pd.DataFrame({
-                "Meal Name": [
-                    "Chicken Curry",
-                    "Homemade Pizza",
-                    "Lamb Souvlaki",
-                    "Chilli",
-                    "Filled Pasta with Salmon",
-                    "Roast Chook and Veggies",
-                ],
-                "Category / Tags": [
-                    "Chicken, Curry, Rice",
-                    "Italian, Quick",
-                    "Greek, Lamb",
-                    "Mexican, Beef, Quick",
-                    "Italian, Seafood",
-                    "Roast, Chicken",
-                ],
-                "Ingredients & Aisle Tags": [
-                    "Chicken breast | Meat & Seafood, Spinach (fresh) | Fresh Produce, Chickpeas | Pantry, Lentils | Pantry, Curry Paste | Pantry, Jasmin Rice | Pantry",
-                    "Pizza bases | Bakery, Passata | Pantry, Cheddar (grated) | Dairy & Eggs",
-                    "Lamb chops | Meat & Seafood, Flatbread | Bakery, Feta cheese | Dairy & Eggs, Cucumber | Fresh Produce, Tomatoes | Fresh Produce",
-                    "Mince meat | Meat & Seafood, Tinned tomatoes | Pantry, Four-bean mix | Pantry, Carrots | Fresh Produce, Onions | Fresh Produce, Garlic | Fresh Produce",
-                    "Filled pasta | Refrigerated Meal Components, Salmon pieces | Meat & Seafood, Fresh mixed vegetables | Fresh Produce, Cream | Dairy & Eggs, Garlic & herb sauce | Pantry",
-                    "Whole chicken | Meat & Seafood, Potatoes | Fresh Produce, Carrots | Fresh Produce, Pumpkin | Fresh Produce, Butter | Dairy & Eggs",
-                ],
-            })
-        return st.session_state.df_library
+        # Fallback dataset if connection is not yet configured
+        fallback_df = pd.DataFrame({
+            "Meal Name": [
+                "Chicken Curry",
+                "Homemade Pizza",
+                "Lamb Souvlaki",
+                "Chilli",
+                "Filled Pasta with Salmon",
+                "Roast Chook and Veggies",
+            ],
+            "Category / Tags": [
+                "Chicken, Curry, Rice",
+                "Italian, Quick",
+                "Greek, Lamb",
+                "Mexican, Beef, Quick",
+                "Italian, Seafood",
+                "Roast, Chicken",
+            ],
+            "Ingredients & Aisle Tags": [
+                "Chicken breast | Meat & Seafood, Spinach (fresh) | Fresh Produce, Chickpeas | Pantry, Lentils | Pantry, Curry Paste | Pantry, Jasmin Rice | Pantry",
+                "Pizza bases | Bakery, Passata | Pantry, Cheddar (grated) | Dairy & Eggs",
+                "Lamb chops | Meat & Seafood, Flatbread | Bakery, Feta cheese | Dairy & Eggs, Cucumber | Fresh Produce, Tomatoes | Fresh Produce",
+                "Mince meat | Meat & Seafood, Tinned tomatoes | Pantry, Four-bean mix | Pantry, Carrots | Fresh Produce, Onions | Fresh Produce, Garlic | Fresh Produce",
+                "Filled pasta | Refrigerated Meal Components, Salmon pieces | Meat & Seafood, Fresh mixed vegetables | Fresh Produce, Cream | Dairy & Eggs, Garlic & herb sauce | Pantry",
+                "Whole chicken | Meat & Seafood, Potatoes | Fresh Produce, Carrots | Fresh Produce, Pumpkin | Fresh Produce, Butter | Dairy & Eggs",
+            ],
+        })
+        return fallback_df, str(e)
 
-df_library = load_data_from_sheet()
+df_library, connection_error = load_data_from_sheet()
 
-# Sidebar
+# Sidebar: Shows connection status so you know whether it's live or using fallback
 with st.sidebar:
-    st.divider()
-    st.subheader("Database Sync")
+    st.subheader("Google Sheet Status")
+    if connection_error:
+        st.warning("⚠️ Using Fallback Data")
+        st.caption(f"Reason: {connection_error}")
+    else:
+        st.success("✅ Connected to Google Sheet!")
+
     if st.button("🔄 Reload from Google Sheet"):
         st.cache_data.clear()
-        df_library = load_data_from_sheet()
-        st.success("Refreshed successfully!")
+        df_library, connection_error = load_data_from_sheet()
         st.rerun()
 
 # ==============================================================================
 # 2. NAVIGATION TABS
 # ==============================================================================
-tab_plan, tab_library, tab_shopping = st.tabs(
-    ["📅 Weekly Planner", "📚 Meal Library", "🛒 Shopping List"]
+tab_plan, tab_library, tab_shopping, tab_add = st.tabs(
+    ["📅 Weekly Planner", "📚 Meal Library", "🛒 Shopping List", "➕ Add Recipe"]
 )
 
 with tab_plan:
@@ -107,14 +113,13 @@ with tab_plan:
 
 with tab_library:
     st.subheader("Master Recipe & Meal Bank")
-    st.markdown("Meals loaded directly from your Google Sheet master library database.")
+    st.markdown("Meals loaded from your Google Sheet (`Meal_Library` tab):")
     st.dataframe(df_library, use_container_width=True)
 
 with tab_shopping:
     st.subheader("🛒 Smart Categorized Shopping List")
     st.markdown("Automatically compiled from your selected weekly meals, sorted by supermarket aisle.")
 
-    # Aggregate selected meals
     active_plan = st.session_state.get("weekly_selections", selected_meals)
     all_chosen_meals = []
     for day_info in active_plan.values():
@@ -147,3 +152,35 @@ with tab_shopping:
             st.markdown(f"#### 🏷️ {aisle}")
             for item in sorted(items_set):
                 st.checkbox(f"{item}", key=f"shop_{aisle}_{item}")
+
+# Writeback tab to add new recipes to the Google Sheet
+with tab_add:
+    st.subheader("➕ Add New Recipe to Library")
+    with st.form("new_recipe_form"):
+        new_name = st.text_input("Meal Name *", placeholder="e.g. Teriyaki Salmon Bowls")
+        new_tags = st.text_input("Categories / Tags", placeholder="e.g. Seafood, Quick, Japanese")
+        new_ingredients = st.text_area(
+            "Ingredients & Aisle Tags *",
+            placeholder="Salmon fillets | Meat & Seafood, Edamame | Frozen Foods, Sushi rice | Pantry",
+            help="Format: Item | Aisle, Item | Aisle"
+        )
+        submitted = st.form_submit_button("Save to Google Sheet", type="primary")
+
+        if submitted:
+            if not new_name.strip() or not new_ingredients.strip():
+                st.error("Please provide both a Meal Name and Ingredients.")
+            else:
+                try:
+                    conn = st.connection("gsheets", type=GSheetsConnection)
+                    new_row = pd.DataFrame([{
+                        "Meal Name": new_name.strip(),
+                        "Category / Tags": new_tags.strip(),
+                        "Ingredients & Aisle Tags": new_ingredients.strip(),
+                    }])
+                    updated_df = pd.concat([df_library, new_row], ignore_index=True)
+                    conn.update(worksheet="Meal_Library", data=updated_df)
+                    st.success(f"Added '{new_name}' to your Google Sheet!")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as write_err:
+                    st.error(f"Could not write to Google Sheet: {write_err}")
