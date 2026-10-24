@@ -166,8 +166,6 @@ with st.sidebar:
 # ==============================================================================
 tab_plan, tab_library, tab_shopping, tab_add = st.tabs(
     ["📅 Weekly Planner", "📚 Meal Library", "🛒 Shopping List", "➕ Add Recipe"]
-tab_plan, tab_library, tab_shopping, tab_add = st.tabs(
-    ["📅 Weekly Planner", "📚 Meal Library", "🛒 Shopping List", "➕ Add Recipe"]
 )
 
 with tab_plan:
